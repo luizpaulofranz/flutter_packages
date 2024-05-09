@@ -139,11 +139,12 @@ class CameraPlugin extends CameraPlatform {
     if (kIsWeb) {
       return availableCamerasWeb();
     }
-
+    final totalInitTime = DateTime.now().millisecondsSinceEpoch;
+    print('Starting availableCameras.');
     try {
       final html.MediaDevices? mediaDevices = window?.navigator.mediaDevices;
       final List<CameraDescription> cameras = <CameraDescription>[];
-
+      final getUserMediaInitTime = DateTime.now().millisecondsSinceEpoch;
       // Throw a not supported exception if the current browser window
       // does not support any media devices.
       if (mediaDevices == null) {
@@ -162,8 +163,15 @@ class CameraPlugin extends CameraPlatform {
           .getVideoTracks()
           .forEach((html.MediaStreamTrack videoTrack) => videoTrack.stop());
 
+      final getUserMediaFinalTime = DateTime.now().millisecondsSinceEpoch;
+      print(
+          "getUserMedia time: ${getUserMediaFinalTime - getUserMediaInitTime}");
+
       // Request available media devices.
       final List<dynamic> devices = await mediaDevices.enumerateDevices();
+      final enumerateDevicesFinalTime = DateTime.now().millisecondsSinceEpoch;
+      print(
+          "enumerateDevices time: ${enumerateDevicesFinalTime - getUserMediaFinalTime}");
 
       // Filter video input devices.
       final Iterable<html.MediaDeviceInfo> videoInputDevices = devices
@@ -177,6 +185,10 @@ class CameraPlugin extends CameraPlatform {
             (html.MediaDeviceInfo device) =>
                 device.deviceId != null && device.deviceId!.isNotEmpty,
           );
+
+      final filterDevicesFinalTime = DateTime.now().millisecondsSinceEpoch;
+      print(
+          "filterDevices time: ${filterDevicesFinalTime - enumerateDevicesFinalTime}");
 
       // Map video input devices to camera descriptions.
       for (final html.MediaDeviceInfo videoInputDevice in videoInputDevices) {
@@ -238,6 +250,10 @@ class CameraPlugin extends CameraPlatform {
         }
       }
 
+      final foreachFinalTime = DateTime.now().millisecondsSinceEpoch;
+      print(
+          "foreachFinalTime time: ${foreachFinalTime - filterDevicesFinalTime}");
+
       return cameras;
     } on html.DomException catch (e) {
       throw CameraException(e.name, e.message);
@@ -284,9 +300,12 @@ class CameraPlugin extends CameraPlatform {
           /// The device id property is currently not supported on Internet Explorer:
           /// https://developer.mozilla.org/en-US/docs/Web/API/MediaDeviceInfo/deviceId#browser_compatibility
           .where(
-            (html.MediaDeviceInfo device) =>
-                device.deviceId != null && device.deviceId!.isNotEmpty,
-          );
+        (html.MediaDeviceInfo device) {
+          return device.deviceId != null &&
+              device.deviceId!.isNotEmpty &&
+              (device.label?.toLowerCase().contains('back') ?? false);
+        },
+      );
 
       // Map video input devices to camera descriptions.
       for (final html.MediaDeviceInfo videoInputDevice in videoInputDevices) {
@@ -323,6 +342,7 @@ class CameraPlugin extends CameraPlatform {
         //
         // Sensor orientation is currently not supported.
         final String cameraLabel = videoInputDevice.label ?? '';
+
         final CameraDescription camera = CameraDescription(
           name: cameraLabel,
           lensDirection: CameraLensDirection.back,
